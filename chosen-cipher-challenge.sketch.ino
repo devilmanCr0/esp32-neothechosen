@@ -30,107 +30,43 @@ unsigned long previous_time = 0;
 const long timeout_time = 2000;
 const BigNumber two = 2;
 const BigNumber one = 1;
-const int default_scale = 0; // used for str2num
 
 void show_encrypt();
 void win();
 
+// Key generation functions, not part of the challenge but its probably
+// also breakable 
+BigNumber private_key = 0;
+BigNumber public_key = 0;
+BigNumber e = 65537;
 
-// Find a random number in hopes of it being prime
-BigNumber random_huge_number(int key_length) {
-  BigNumber low_r = two.pow(key_length-1) + one;
-  BigNumber high_r = two.pow(key_length) - one;
-
-  BigNumber random_number = low_r;
-  BigNumber strange_rand = 0;
-  while(1) {
-    for(int i = 0; i < 5; i++) {
-        strange_rand = random(1, INT32_MAX);
-        strange_rand *= two.pow(key_length/2);
-        random_number += strange_rand;
-      
-    }
-
-    // We need to be within valid range so we can find primes with high probability
-    if (random_number > high_r ) {
-        random_number = low_r;
-        continue;
-    }
-    break;
-  }
-
-  return random_number;
-}
-
-
-int pass_miller_rabin(BigNumber n) {
-
-  if (n % two == 0) {
-    return 0;
-  }
-  
-  BigNumber s = n - one;
-
-  while ( s % two == 0 ) {
-     s /= two;
-  }
-
-
-  // With 20 iterations you are almost guaranteed a prime
-  for (int i = 0; i < 20; i++) {
-      BigNumber randval = random(1, INT32_MAX);
-      
-      BigNumber a = randval % (n - one) + one;
-      BigNumber temp = s;
-      BigNumber mod = a.powMod(temp, n);
-      while(temp != n - one && mod != one && mod != n - one) {
-           mod = mod.powMod(2, n);
-           temp = temp * two;
-      }
-      if (mod != n - one && temp % two == 0 ) {
-          return 0;
-      }
-    
-  }
-
-  return 1;
-}
-
-
-BigNumber obtain_prime(int key_length) {
-  while(1) {
-      BigNumber n = random_huge_number(key_length);  
-      
-      Serial.println("Trying out");
-      char* stringnumber = n.toString();
-      Serial.println(stringnumber);
-      free(stringnumber);
-        
-      if (pass_miller_rabin(n)) {
-        return n;  
-      }
-  }
-}
-
-void generate_key() {
-     BigNumber prime1 = obtain_prime(KEY_LENGTH);
-     char* stringified_prime = prime1.toString();
-     Serial.println(stringified_prime);
-     free(stringified_prime);
-}
+BigNumber random_huge_number(int key_length);
+BigNumber obtain_prime(int key_length);
+int pass_miller_rabin(BigNumber n);
+void generate_key();
 
 // starting the connection to the wifi and initializing RSA key pairs
 void setup() {
         Serial.begin(115200); // interface with serial port 
-        Serial.print("Hello?");
-        
-        Serial.println("Starting the number race");
+        Serial.println("Initializing..");
        
         BigNumber::begin();
 
         randomSeed(esp_random());
 
         generate_key();
+        char* value1 = public_key.toString();
+        char* value2 = private_key.toString();
+        
+        Serial.println("My N is ...");
+        Serial.println(value1);
+
+        Serial.println("My d is ....");
+        Serial.println(value2);
+         
+
+        free(value1);
+        free(value2);
 
         BigNumber::finish();
         exit(1);
@@ -253,4 +189,116 @@ void loop() {
         client.stop();
         Serial.println("Client disconnected");
         Serial.println("");
+}
+
+BigNumber obtain_prime(int key_length) {
+  while(1) {
+      BigNumber n = random_huge_number(key_length);  
+             
+      if (pass_miller_rabin(n)) {
+        return n;  
+      }
+  }
+}
+
+// Find a random number in hopes of it being prime
+BigNumber random_huge_number(int key_length) {
+  BigNumber low_r = two.pow(key_length-1) + one;
+  BigNumber high_r = two.pow(key_length) - one;
+
+  BigNumber random_number = low_r;
+  BigNumber strange_rand = 0;
+  while(1) {
+    for(int i = 0; i < 5; i++) {
+        strange_rand = random(1, INT32_MAX);
+        strange_rand *= two.pow(key_length/2);
+        random_number += strange_rand;
+      
+    }
+
+    // We need to be within valid range so we can find primes with high probability
+    if (random_number > high_r ) {
+        random_number = low_r;
+        continue;
+    }
+    break;
+  }
+
+  return random_number;
+}
+
+// Calculates the likelihood of n being prime
+int pass_miller_rabin(BigNumber n) {
+
+  if (n % two == 0) {
+    return 0;
+  }
+  
+  BigNumber s = n - one;
+
+  while ( s % two == 0 ) {
+     s /= two;
+  }
+
+
+  // With 20 iterations you are almost guaranteed a prime
+  for (int i = 0; i < 20; i++) {
+      BigNumber randval = random(1, INT32_MAX);
+      
+      BigNumber a = randval % (n - one) + one;
+      BigNumber temp = s;
+      BigNumber mod = a.powMod(temp, n);
+      while(temp != n - one && mod != one && mod != n - one) {
+           mod = mod.powMod(2, n);
+           temp = temp * two;
+      }
+      if (mod != n - one && temp % two == 0 ) {
+          return 0;
+      }
+    
+  }
+
+  return 1;
+}
+
+
+BigNumber mod_inv(BigNumber a, BigNumber b) {
+   BigNumber y = 0; // ;(
+   BigNumber x = 1;
+   BigNumber A = a;
+   BigNumber M = b;
+   BigNumber m0 = M;
+
+   while (A > 1) {
+        BigNumber q = A / M;
+        BigNumber t = M;
+
+        M = A % M;
+        A = t;
+        t = y;
+
+        y = x - q * y;
+        x = t;
+   }
+
+   if (x < 0) {
+        x += m0;
+   }
+   return x;
+}
+
+void generate_key() {
+     BigNumber q = obtain_prime(KEY_LENGTH);
+     BigNumber p = obtain_prime(KEY_LENGTH);
+
+     BigNumber n = q * p;
+     BigNumber phi_n = (p - one) * (q - one);
+      
+
+     BigNumber d = mod_inv(e, phi_n);
+
+     public_key = n;
+     private_key = d;
+
+     return;
 }
