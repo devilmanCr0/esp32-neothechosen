@@ -3,16 +3,8 @@
 #include <esp_random.h>
 #include <BigNumber.h>
 
-
-
 #define KEY_LENGTH 128
 #define FLAG "flag_here"
-
-
-// This will control the pseudo random generator
-// so make sure not to connect any physical wires on this haha
-#define UNUSED_PIN 15
-
 
 // Use these pins to connect to the suppossed LED strips d:
 #define RED_PIN 33
@@ -51,27 +43,9 @@ void setup() {
         Serial.println("Initializing..");
        
         BigNumber::begin();
-
         randomSeed(esp_random());
-
         generate_key();
-        char* value1 = public_key.toString();
-        char* value2 = private_key.toString();
-        
-        Serial.println("My N is ...");
-        Serial.println(value1);
-
-        Serial.println("My d is ....");
-        Serial.println(value2);
-         
-
-        free(value1);
-        free(value2);
-
-        BigNumber::finish();
-        exit(1);
     
-        
         Serial.print("Connecting to ");
         Serial.println(ssid);
 
@@ -190,6 +164,8 @@ void loop() {
         Serial.println("Client disconnected");
         Serial.println("");
 }
+
+
 
 BigNumber obtain_prime(int key_length) {
   while(1) {
