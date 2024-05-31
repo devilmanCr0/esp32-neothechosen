@@ -49,6 +49,7 @@ void setup() {
   BigNumber::begin();
   randomSeed(esp_random());
   generate_key();  
+  Serial.println("Generated key, encrypting flag..");
   encrypt_flag();
 
   Serial.print("Connecting to ");
@@ -195,10 +196,33 @@ void loop() {
 
 
 void encrypt_flag() {  
-  BigNumber flag_to_num = FLAG; //WARNING, this will NOT conver the flag to numbers like you'd expect
+  BigNumber flag_to_num = bytes_to_long(FLAG, strlen(FLAG)); 
+  
+  //Serial.println(flag_to_num.toString());
 
   encrypted_flag = flag_to_num.powMod(e, public_key);
   encrypted_flag_string = encrypted_flag.toString();
+}
+
+BigNumber bytes_to_long(char* string, int len) {
+  int i = 0;
+  int j = 0;
+  BigNumber n = 0;
+
+  // (n >> (k-1)) % 2 will determine if the bit is set to 1 or not
+
+  for(; i < len; i++) {
+    for(j = 0; j < 8; j++) {
+      int bit_position_global = ((len - i)*8) - j;
+      int bit_position_local  = 8-j;
+
+      if ( (string[i] >> (bit_position_local - 1)) % 2 == 1) {
+        n += two.pow(bit_position_global-1);
+      }
+    }
+  }
+
+  return n;
 }
 
 BigNumber obtain_prime(int key_length) {
@@ -210,8 +234,6 @@ BigNumber obtain_prime(int key_length) {
     }
   }
 }
-
-
 
 // Find a random number in hopes of it being prime
 BigNumber random_huge_number(int key_length) {
