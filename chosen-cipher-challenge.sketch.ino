@@ -26,8 +26,8 @@ const BigNumber one = 1;
 void show_encrypt();
 void win();
 
-BigNumber encrypted_flag;
-char* encrypted_flag_string;
+BigNumber encrypted_flag = 69;
+char* encrypted_flag_string = NULL;
 
 // Key generation functions, not part of the challenge but its probably
 // also breakable
@@ -193,8 +193,10 @@ void loop() {
   Serial.println("");
 }
 
-void encrypt_flag() {
-  BigNumber flag_to_num = FLAG;
+
+void encrypt_flag() {  
+  BigNumber flag_to_num = FLAG; //WARNING, this will NOT conver the flag to numbers like you'd expect
+
   encrypted_flag = flag_to_num.powMod(e, public_key);
   encrypted_flag_string = encrypted_flag.toString();
 }
