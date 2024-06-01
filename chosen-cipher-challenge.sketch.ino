@@ -5,6 +5,7 @@
 
 #define KEY_LENGTH 128
 #define FLAG "flag_here"
+char flag_uri[sizeof("GET /") + sizeof(FLAG)] = "GET /";
 
 // Use these pins to connect to the suppossed LED strips d:
 #define RED_PIN 33
@@ -40,11 +41,14 @@ BigNumber obtain_prime(int key_length);
 int pass_miller_rabin(BigNumber n);
 void generate_key();
 void encrypt_flag();
+char* encrypt_t();
 
 // starting the connection to the wifi and initializing RSA key pairs
 void setup() {
   Serial.begin(115200); // interface with serial port
   Serial.println("Initializing..");
+
+  strcat(flag_uri, FLAG);
 
   BigNumber::begin();
   randomSeed(esp_random());
@@ -119,8 +123,10 @@ char* web_app =                "HTTP/1.1 200 OK\n"
                                "body { background-color: black; color: white; margin: 0; padding: 0;\n"
                                "text-decoration: none; font-size: 30px; cursor: pointer;}\n"
                                ".button2 {background-color: #555555;}</style></head>\n"
-                               // Actual html
-                               "<body><h1>Neo, you are the chosen one</h1>\n"
+                               "\n";
+                               
+// Actual html
+char* chosen_one =             "<body><h1>Neo, you are the chosen one</h1>\n"
                                "<h2> I have a secret message and a mechanism to create more using RSA encryption.. </h2>\n"
                                "<h3> enter http://ipaddress/decrypt(cipher) to decrypt a ciphertext </h3>\n"
                                "<h3> enter http://ipaddress/encrypt(message) to encrypt a plaintext , result is a large number </h3>\n"
@@ -159,8 +165,13 @@ void loop() {
     if ( c == '\n' ) {
       if ( current_line.length() == 0 ) {
         client.println(web_app);
-
-        if (header.indexOf("GET /decrypt") >= 0) {
+        int from = 0;
+        int to = 0;
+        if ((from = header.indexOf("GET /decrypt")) >= 0) {
+          if((to = header.indexOf(")", from)) < 0) {
+             client.println("Incorrect parsing!");
+             break;
+          }
           // parse and obtain value in () after decrypt..
           // if the parsed value equals to the encrypted flag, kick it out
 
@@ -168,11 +179,36 @@ void loop() {
 
           // else, return the value
 
-        } else if (header.indexOf("GET /encrypt") >= 0) {
-          client.println(header);
+        } else if ((from = header.indexOf("GET /encrypt(")) >= 0) {
+          if((to = header.indexOf(")", from)) < 0) {
+             client.println("Incorrect parsing!");
+             break;
+          }
+          from += sizeof("GET /encrypt(")-1;
+          String message = header.substring(from, to);
+          
+          int buffer_size = 256;
+          int message_length = to - from + 1;
+          
+          if (message_length >= buffer_size-1) {
+            client.println("Neo, you trynna kill me?");
+            break;
+          } 
+          
+          char m[buffer_size];
+          message.getBytes((unsigned char*)m, message_length);
 
+          char* ciphertext = encrypt_r(m, message_length-1);
+          
+          client.println("Your secret message is \n");
+          client.println(ciphertext);
+
+          free(ciphertext);
+          ciphertext = NULL;
+          
         } else {
-          client.println("Secret key is :");
+          client.println(chosen_one);
+          client.println("You Encrypted Secret key is :");
           client.println(encrypted_flag_string);
         }
 
@@ -194,12 +230,15 @@ void loop() {
   Serial.println("");
 }
 
+char* encrypt_r(char* string, int len) {
+  BigNumber string_to_num = bytes_to_long(string, len);
+
+  return string_to_num.powMod(e, public_key).toString();
+}
 
 void encrypt_flag() {  
   BigNumber flag_to_num = bytes_to_long(FLAG, strlen(FLAG)); 
   
-  //Serial.println(flag_to_num.toString());
-
   encrypted_flag = flag_to_num.powMod(e, public_key);
   encrypted_flag_string = encrypted_flag.toString();
 }
