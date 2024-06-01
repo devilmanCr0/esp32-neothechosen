@@ -6,6 +6,8 @@
 #define KEY_LENGTH 128
 #define FLAG "flag_here"
 char flag_uri[sizeof("GET /") + sizeof(FLAG)] = "GET /";
+int solved = 0;
+TaskHandle_t win_loop_task;
 
 // Use these pins to connect to the suppossed LED strips d:
 #define RED_PIN 33
@@ -23,9 +25,6 @@ unsigned long previous_time = 0;
 const long timeout_time = 2000;
 const BigNumber two = 2;
 const BigNumber one = 1;
-
-void show_encrypt();
-void win();
 
 BigNumber encrypted_flag = 69;
 char* encrypted_flag_string = NULL;
@@ -46,13 +45,17 @@ char* encrypt_t();
 // starting the connection to the wifi and initializing RSA key pairs
 void setup() {
   Serial.begin(115200); // interface with serial port
+
+  pinMode(RED_PIN, OUTPUT);
+  pinMode(BLUE_PIN, OUTPUT);
+
   Serial.println("Initializing..");
 
   strcat(flag_uri, FLAG);
 
   BigNumber::begin();
   randomSeed(esp_random());
-  generate_key();  
+  generate_key();
   Serial.println("Generated key, encrypting flag..");
   encrypt_flag();
 
@@ -124,17 +127,45 @@ char* web_app =                "HTTP/1.1 200 OK\n"
                                "text-decoration: none; font-size: 30px; cursor: pointer;}\n"
                                ".button2 {background-color: #555555;}</style></head>\n"
                                "\n";
-                               
+
 // Actual html
 char* chosen_one =             "<body><h1>Neo, you are the chosen one</h1>\n"
                                "<h2> I have a secret message and a mechanism to create more using RSA encryption.. </h2>\n"
-                               "<h3> enter http://ipaddress/decrypt(cipher) to decrypt a ciphertext </h3>\n"
-                               "<h3> enter http://ipaddress/encrypt(message) to encrypt a plaintext , result is a large number </h3>\n"
+                               "<h3> enter http://ipaddress/decrypt(cipher) to decrypt a ciphertext, result is a large number </h3>\n"
+                               "<h3> enter http://ipaddress/encrypt(message) to encrypt a plaintext, result is a large number </h3>\n"
                                "<h3> Neo, you must uncover this secret message and travel through its portal (uri)\n"
                                " however, the slug agents of the matrix don't let you directly decrypt the secret message </h3>\n"
                                "<h2> You are the chosen one neo I believe in you... </h2>\n"
                                "\n";
 
+char* busted    =               "<h1> THE SLUGS FOUND YOU NEO, RUN ! </h1>\n"
+                                "<h2> <pre>/^\\   /^\\<br>"
+                                "    {  O}  {  O}\\<br>"
+                                "     \\ /    \\ /\\<br>"
+                                "     //     //       _------_\\<br>"
+                                "    //     //     ./~        ~-_\\<br>"
+                                "   / ~----~/     /              \\ \\<br>"
+                                " /         :   ./       _---_    ~-\\<br>"
+                                "|  \\________) :       /~     ~\\   |\\<br>"
+                                "|        /    |      |  :~~\\  |   |\\<br>"
+                                "|       |     |      |  \\___-~    |\\<br>"
+                                "|        \\ __/`^\\______\\.        ./\\<br>"
+                                " \\                     ~-______-~\\.\\<br>"
+                                "  ------------------------------------</pre></h2\n"
+                                "\n";
+
+// Define your win condition here
+void win(void* arg) {
+  while ( 1 ) {
+    digitalWrite(BLUE_PIN, HIGH);
+    delay(1000);
+    digitalWrite(BLUE_PIN, LOW);
+
+    digitalWrite(RED_PIN, HIGH);
+    delay(1000);
+    digitalWrite(RED_PIN, LOW);
+  }
+}
 
 void loop() {
   WiFiClient client = server.available(); // Listen to incomings
@@ -164,48 +195,105 @@ void loop() {
 
     if ( c == '\n' ) {
       if ( current_line.length() == 0 ) {
+
+        if (solved) {
+          client.println(" You already solved this challenge, to reset, eat cheese ");
+          break;
+        }
+
+
         client.println(web_app);
         int from = 0;
         int to = 0;
-        if ((from = header.indexOf("GET /decrypt")) >= 0) {
-          if((to = header.indexOf(")", from)) < 0) {
-             client.println("Incorrect parsing!");
-             break;
+        if ((from = header.indexOf("GET /decrypt(")) >= 0) {
+          if ((to = header.indexOf(")", from)) < 0) {
+            client.println("Incorrect parsing!");
+            break;
           }
-          // parse and obtain value in () after decrypt..
-          // if the parsed value equals to the encrypted flag, kick it out
 
-          // if the decrypted value equals the plaintext flag, kick it out
-
-          // else, return the value
-
-        } else if ((from = header.indexOf("GET /encrypt(")) >= 0) {
-          if((to = header.indexOf(")", from)) < 0) {
-             client.println("Incorrect parsing!");
-             break;
-          }
-          from += sizeof("GET /encrypt(")-1;
+          from += sizeof("GET /decrypt(") - 1;
           String message = header.substring(from, to);
-          
+
           int buffer_size = 256;
           int message_length = to - from + 1;
-          
-          if (message_length >= buffer_size-1) {
+
+          if (message_length >= buffer_size - 1) {
             client.println("Neo, you trynna kill me?");
             break;
-          } 
-          
+          }
+
           char m[buffer_size];
           message.getBytes((unsigned char*)m, message_length);
 
-          char* ciphertext = encrypt_r(m, message_length-1);
-          
+          if (strcmp(encrypted_flag_string, m) == 0) {
+            // if the parsed value equals to the encrypted flag, kick it out
+            client.println(busted);
+            break;
+          }
+
+
+          char* plaintext = decrypt_r(m);
+
+          /*
+            // If the decrypted value contains any symbols from the flag, bye bye bud
+            Serial.println(plaintext_string);
+            for (int b = 0; b < strlen(plaintext_string); b++) {
+            if (strchr(FLAG, plaintext[b]) != NULL) {
+              client.println(busted);
+              break;
+            }
+            }*/
+
+          client.println("The revealed message is: ");
+          client.println(plaintext);
+
+          free(plaintext);
+          plaintext = NULL;
+
+
+        } else if ((from = header.indexOf("GET /encrypt(")) >= 0) {
+          if ((to = header.indexOf(")", from)) < 0) {
+            client.println("Incorrect parsing!");
+            break;
+          }
+          from += sizeof("GET /encrypt(") - 1;
+          String message = header.substring(from, to);
+
+          int buffer_size = 256;
+          int message_length = to - from + 1;
+
+          if (message_length >= buffer_size - 1) {
+            client.println("Neo, you trynna kill me?");
+            break;
+          }
+
+          char m[buffer_size];
+          message.getBytes((unsigned char*)m, message_length);
+
+          char* ciphertext = encrypt_r(m, message_length - 1);
+
           client.println("Your secret message is \n");
           client.println(ciphertext);
 
           free(ciphertext);
           ciphertext = NULL;
-          
+
+        } else if ( header.indexOf(flag_uri) >= 0 ) {
+          solved = 1;
+
+          xTaskCreatePinnedToCore(
+            win,
+            "win_loop",
+            10000,
+            NULL,
+            1,
+            &win_loop_task,
+            0);
+
+          // You can insert more println's here if you would like some flashy js
+          // or cool art to declare victory
+          client.println("You did it Neo! You saved us all");
+
         } else {
           client.println(chosen_one);
           client.println("You Encrypted Secret key is :");
@@ -230,15 +318,21 @@ void loop() {
   Serial.println("");
 }
 
+char* decrypt_r(char* string) {
+  BigNumber cipher_num = string;
+
+  return cipher_num.powMod(private_key, public_key).toString();
+}
+
 char* encrypt_r(char* string, int len) {
   BigNumber string_to_num = bytes_to_long(string, len);
 
   return string_to_num.powMod(e, public_key).toString();
 }
 
-void encrypt_flag() {  
-  BigNumber flag_to_num = bytes_to_long(FLAG, strlen(FLAG)); 
-  
+void encrypt_flag() {
+  BigNumber flag_to_num = bytes_to_long(FLAG, strlen(FLAG));
+
   encrypted_flag = flag_to_num.powMod(e, public_key);
   encrypted_flag_string = encrypted_flag.toString();
 }
@@ -250,13 +344,13 @@ BigNumber bytes_to_long(char* string, int len) {
 
   // (n >> (k-1)) % 2 will determine if the bit is set to 1 or not
 
-  for(; i < len; i++) {
-    for(j = 0; j < 8; j++) {
-      int bit_position_global = ((len - i)*8) - j;
-      int bit_position_local  = 8-j;
+  for (; i < len; i++) {
+    for (j = 0; j < 8; j++) {
+      int bit_position_global = ((len - i) * 8) - j;
+      int bit_position_local  = 8 - j;
 
       if ( (string[i] >> (bit_position_local - 1)) % 2 == 1) {
-        n += two.pow(bit_position_global-1);
+        n += two.pow(bit_position_global - 1);
       }
     }
   }
