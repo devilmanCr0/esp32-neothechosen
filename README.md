@@ -4,7 +4,7 @@
 ### This uses RSA's chosen cipher attack to retrieve the flag
 
 The attack works when the end user is given the ability to encrypt/decrypt any message they want (except for the ciphertext they're trying to reveal)
-More information on the other [document](chosen_cipher.md)
+More information on the other [document](chosen-cipher.md)
 
 Due to the nature of the intended solution, you may want to consider adding padding values to the flag. Usually the trailing characters get muddied out during the arithmetic process. 
 
