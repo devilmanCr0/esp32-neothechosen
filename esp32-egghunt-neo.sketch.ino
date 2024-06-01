@@ -28,6 +28,7 @@ const BigNumber one = 1;
 
 BigNumber encrypted_flag = 69;
 char* encrypted_flag_string = NULL;
+char* public_key_string = NULL;
 
 // Key generation functions, not part of the challenge but its probably
 // also breakable
@@ -296,8 +297,11 @@ void loop() {
 
         } else {
           client.println(chosen_one);
-          client.println("You Encrypted Secret key is :");
+          client.println("Your Encrypted Secret key is :");
           client.println(encrypted_flag_string);
+          client.println("The special public number: ");
+          client.println(public_key_string);
+          
         }
 
         break;
@@ -335,6 +339,7 @@ void encrypt_flag() {
 
   encrypted_flag = flag_to_num.powMod(e, public_key);
   encrypted_flag_string = encrypted_flag.toString();
+  public_key_string = public_key.toString();
 }
 
 BigNumber bytes_to_long(char* string, int len) {
